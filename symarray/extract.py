@@ -129,7 +129,7 @@ class Extraction:
 
         G = nx.DiGraph()
         for k, node in nodes.items():
-            G.add_node(node.eclass)
+            G.add_node(node.eclass, shape="diamond")
             G.add_node(k)
             G.add_edge(node.eclass, k)
 
