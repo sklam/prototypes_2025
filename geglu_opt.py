@@ -11,9 +11,7 @@ from egglog import converter
 def geglu_tanh_forward_ufunc(a):
     dt = np.float32
     result = (
-        dt(0.5)
-        * a
-        * (
+        dt(0.5) * a * (
             dt(1)
             + np.tanh(np.sqrt(dt(2) / dt(np.pi)) * (a + dt(0.044715) * a**3))
         )
@@ -99,10 +97,11 @@ extracted = egraph.extract(eg_root)
 print(extracted)
 # egraph.display()
 
+# -------------------------------- distillation --------------------------------
 print("distillation".center(80, "="))
 opt_func = distill_to_callable(extracted, "a")
-print("distill")
 
+# -------------------------------- testing --------------------------------
 
 import numpy as np
 
@@ -112,3 +111,18 @@ expected = orig_func(arr)
 got = opt_func(arr)
 
 np.testing.assert_allclose(expected, got, rtol=5e-6)
+
+# ----------------------------- MLIR distillation -----------------------------
+print("distill MLIR")
+from symarray.distillation_mlir import distill_to_mlir
+mlir_source = distill_to_mlir(extracted, "a")
+print(mlir_source)
+
+import subprocess as subp
+import tempfile
+with tempfile.NamedTemporaryFile() as the_file:
+    with open(the_file.name, "w") as fout:
+        print(mlir_source, file=fout)
+
+    out = subp.check_output(f"mlir-opt --canonicalize {the_file.name}", shell=True, encoding='utf8')
+    print(out)

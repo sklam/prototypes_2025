@@ -14,7 +14,7 @@ def func({argspec}):
 
 
 def distill_to_callable(tree: Term, argspec: str) -> str:
-    source = distill_to_source(tree)
+    source = SourceGen(distill_to_expr(tree)).generate()
 
     funcsrc = _template.format(argspec=argspec, body=indent(source, " " * 4))
     ns = {"sqrt": np.sqrt, "float32": np.float32}
@@ -24,7 +24,7 @@ def distill_to_callable(tree: Term, argspec: str) -> str:
     return local_ns["func"]
 
 
-def distill_to_source(tree: Term) -> str:
+def distill_to_expr(tree: Term) -> syms.Expr:
     raw = str(tree)
 
     class Term:
@@ -61,7 +61,8 @@ def distill_to_source(tree: Term) -> str:
     local_ns: dict[str, Any] = {}
     exec(compile(astree, "<string>", "exec"), ns, local_ns)
     result = local_ns["__result__"]
-    return SourceGen(result).generate()
+    return result
+
 
 
 def _ast_ensure_assignment(tree: ast.AST) -> ast.AST:
