@@ -1,4 +1,4 @@
-import symarray.array as np
+import symarray.array
 from symarray.lift import lift
 from symarray.egraph import as_egraph, Term
 from symarray.distillation import distill_to_callable
@@ -6,26 +6,8 @@ from pprint import pprint
 from egglog import eq, rewrite, rule, birewrite
 from egglog import EGraph, ruleset, i64, f64
 from egglog import converter
+import numpy as np
 
-
-def geglu_tanh_forward_ufunc(a):
-    dt = np.float32
-    result = (
-        dt(0.5) * a * (
-            dt(1)
-            + np.tanh(np.sqrt(dt(2) / dt(np.pi)) * (a + dt(0.044715) * a**3))
-        )
-    )
-    return result
-
-
-orig_func = geglu_tanh_forward_ufunc
-
-exprtree = lift(orig_func)
-pprint(exprtree)
-
-
-eg_root = as_egraph(exprtree)
 
 # ----------------------------------- Egraph -----------------------------------
 
@@ -85,44 +67,79 @@ def pade44_tanh_expansion(x: Term, y: Term, z: Term):
     )
 
 
-egraph = EGraph()
-egraph.let("root", eg_root)
 
 
-schedule = (basic_math | pade44_tanh_expansion | const_propagation).saturate()
-# schedule = (pade44_tanh_expansion ).saturate()
-# egraph.saturate(schedule)
-egraph.run(schedule)
-extracted = egraph.extract(eg_root)
-print(extracted)
-# egraph.display()
+def geglu_tanh_forward_ufunc(a):
+    dt = np.float32
+    result = (
+        dt(0.5) * a * (
+            dt(1)
+            + np.tanh(np.sqrt(dt(2) / dt(np.pi)) * (a + dt(0.044715) * a**3))
+        )
+    )
+    return result
 
-# -------------------------------- distillation --------------------------------
-print("distillation".center(80, "="))
-opt_func = distill_to_callable(extracted, "a")
+# arr = np.linspace(-1, 1, 10000000, dtype=np.float32)
+# geglu_tanh_forward_ufunc(arr)
 
-# -------------------------------- testing --------------------------------
 
-import numpy as np
+def eqsat_opt(lifted):
+    eq_root = as_egraph(lifted)
 
-arr = np.linspace(-1, 1, 10000000, dtype=np.float32)
+    egraph = EGraph()
+    egraph.let("root", eq_root)
 
-expected = orig_func(arr)
-got = opt_func(arr)
+    schedule = (basic_math | pade44_tanh_expansion | const_propagation).saturate()
+    # schedule = (pade44_tanh_expansion ).saturate()
+    # egraph.saturate(schedule)
+    egraph.run(schedule)
+    extracted = egraph.extract(eq_root)
+    # egraph.display()
+    return extracted
 
-np.testing.assert_allclose(expected, got, rtol=5e-6)
 
-# ----------------------------- MLIR distillation -----------------------------
-print("distill MLIR")
-from symarray.distillation_mlir import distill_to_mlir
-mlir_source = distill_to_mlir(extracted, "a")
-print(mlir_source)
+def main():
 
-import subprocess as subp
-import tempfile
-with tempfile.NamedTemporaryFile() as the_file:
-    with open(the_file.name, "w") as fout:
-        print(mlir_source, file=fout)
+    orig_func = geglu_tanh_forward_ufunc
+    ns = {
+        'np': symarray.array,
+    }
+    exprtree = lift(orig_func, ns)
+    pprint(exprtree)
 
-    out = subp.check_output(f"mlir-opt --canonicalize {the_file.name}", shell=True, encoding='utf8')
-    print(out)
+    extracted = eqsat_opt(exprtree)
+    print(extracted)
+
+    # -------------------------------- distillation --------------------------------
+    print("distillation".center(80, "="))
+    opt_func = distill_to_callable(extracted, "a")
+
+    # -------------------------------- testing --------------------------------
+
+    import numpy as np
+
+    arr = np.linspace(-1, 1, 10000000, dtype=np.float32)
+
+    got = opt_func(arr)
+    expected = orig_func(arr)
+
+    np.testing.assert_allclose(expected, got, rtol=5e-6)
+
+    # ----------------------------- MLIR distillation -----------------------------
+    print("distill MLIR")
+    from symarray.distillation_mlir import distill_to_mlir
+    mlir_source = distill_to_mlir(extracted, "a")
+    print(mlir_source)
+
+    import subprocess as subp
+    import tempfile
+    with tempfile.NamedTemporaryFile() as the_file:
+        with open(the_file.name, "w") as fout:
+            print(mlir_source, file=fout)
+
+        out = subp.check_output(f"mlir-opt --canonicalize {the_file.name}", shell=True, encoding='utf8')
+        print(out)
+
+
+if __name__ == "__main__":
+    main()
