@@ -155,9 +155,11 @@ class Compiler():
         self.ee = create_execution_engine()
 
     def run_frontend(self, py_func, sig):
-        fname = "testme.mlir"
-        with open(fname, "rt") as f:
-            mlir_src = f.read()
+        # fname = "testme.mlir"
+        # with open(fname, "rt") as f:
+        #     mlir_src = f.read()
+        # return mlir_src
+        mlir_src = eqsat_compiler(py_func, sig)
         return mlir_src
 
     def run_backend(self, mlir_src):
@@ -216,3 +218,37 @@ def vectorize(func_or_sig):
         raise TypeError("Expected a python function or a string signature")
     return wrap
 
+
+
+def eqsat_compiler(pyfunc, sig):
+    from geglu_opt import lift, eqsat_opt
+    from symarray.distillation_mlir import distill_to_mlir
+    import symarray.array as symarray
+    import inspect
+
+    exprtree = lift(pyfunc, {'np': symarray})
+    extracted = eqsat_opt(exprtree)
+
+    argspec = inspect.signature(pyfunc)
+    params = ','.join(map(str, argspec.parameters))
+    return distill_to_mlir(extracted, params)
+
+# ----
+
+
+def main():
+    @vectorize("float32(float32)")
+    def gelu(a):
+        dt = np.float32
+        r = (dt(0.5) * a * (dt(1) + np.tanh(np.sqrt(dt(2) / dt(np.pi)) * (a + dt(0.044715) * a ** 3))))
+        return r
+
+    n = 1000
+    x = np.linspace(-3, 4, n, dtype=np.float32)
+
+    out = np.linalg.norm(gelu(x) - gelu.py_func(x))
+    print(out)  # expected 0.71636987
+
+
+if __name__ == "__main__":
+    main()
