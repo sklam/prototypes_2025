@@ -29,7 +29,7 @@ def PowConst(x: Term, i: i64Like) -> Term: ...
 @ruleset
 def expand_power(x: Term, y: Term, term: Term, i: i64, j: i64, k: String):
     yield rewrite(Pow(x, Term.lit_i64(i))).to(PowConst(x, i))
-    yield rewrite(PowConst(x, 0)).to(Term.lit_f32(0.0))
+    yield rewrite(PowConst(x, 0)).to(Term.lit_f32(1.0))
     yield rewrite(PowConst(x, 1)).to(x)
     yield rewrite(PowConst(x, i)).to(Mul(x, PowConst(x, i - 1)), i > 1)
 
@@ -38,7 +38,10 @@ def expand_power(x: Term, y: Term, term: Term, i: i64, j: i64, k: String):
 rootexpr = Pow(Term.var("x"), Term.lit_i64(4))
 egraph = EGraph()
 egraph.let("root", rootexpr)
+# Without debug graph
 egraph.run((expand_power).saturate())
+# To show debug graph walk:
+# egraph.saturate((expand_power))
 out, cost = egraph.extract(rootexpr, include_cost=True)
 
 print(out)

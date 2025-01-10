@@ -58,7 +58,7 @@ def basic_math(x: Term, y: Term, z: Term, i: i64, fval: f64):
 
     # Pow
     yield rewrite(Pow(x, Term.lit_i64(i))).to(PowConst(x, i))
-    yield rewrite(PowConst(x, 0)).to(Term.lit_f32(0.0))
+    yield rewrite(PowConst(x, 0)).to(Term.lit_f32(1.0))
     yield rewrite(PowConst(x, 1)).to(x)
     yield rewrite(PowConst(x, i)).to(Mul(x, PowConst(x, i - 1)), i > 1)
 
